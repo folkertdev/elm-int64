@@ -19,22 +19,132 @@ fuzz2 a b name thunk =
     fuzz (Fuzz.tuple ( a, b )) name <| \( x, p ) -> thunk x p
 
 
+fuzz3 a b c name thunk =
+    fuzz (Fuzz.tuple3 ( a, b, c )) name <| \( x, p, q ) -> thunk x p q
+
+
+fuzzInt64 =
+    Fuzz.map Int64.fromInt Fuzz.int
+
+
 fuzzTests =
     describe "fuzz tests"
-        [ fuzz2 (Fuzz.intRange 0 64) (Fuzz.map Int64.fromInt Fuzz.int) "rotateLeftBy n << rotateRightBy n = id" <|
+        [ fuzz2 (Fuzz.intRange 0 64) fuzzInt64 "rotateLeftBy n << rotateRightBy n = id" <|
             \n value ->
                 value
                     |> Int64.rotateRightBy n
                     |> Int64.rotateLeftBy n
                     |> Int64.toHex
                     |> Expect.equal (Int64.toHex value)
-        , fuzz2 (Fuzz.intRange 0 64) (Fuzz.map Int64.fromInt Fuzz.int) "rotateRightBy n << rotateLeftBy n = id" <|
+        , fuzz2 (Fuzz.intRange 0 64) fuzzInt64 "rotateRightBy n << rotateLeftBy n = id" <|
             \n value ->
                 value
                     |> Int64.rotateLeftBy n
                     |> Int64.rotateRightBy n
                     |> Int64.toHex
                     |> Expect.equal (Int64.toHex value)
+        , fuzz2 fuzzInt64 fuzzInt64 "a & (a | b) = a" <|
+            \a b ->
+                Int64.and a (Int64.or a b)
+                    |> Int64.toHex
+                    |> Expect.equal (Int64.toHex a)
+        , fuzz2 fuzzInt64 fuzzInt64 "a | (a & b) = a" <|
+            \a b ->
+                Int64.or a (Int64.and a b)
+                    |> Int64.toHex
+                    |> Expect.equal (Int64.toHex a)
+        , fuzz3 fuzzInt64 fuzzInt64 fuzzInt64 "a & (b | c) = (a & b) | (a & c)" <|
+            \a b c ->
+                let
+                    left =
+                        Int64.and a (Int64.or b c)
+
+                    right =
+                        Int64.and a b
+                            |> Int64.or (Int64.and a c)
+                in
+                Int64.toHex left
+                    |> Expect.equal (Int64.toHex right)
+        , fuzz3 fuzzInt64 fuzzInt64 fuzzInt64 "a & (b ^ c) = (a & b) ^ (a & c)" <|
+            \a b c ->
+                let
+                    left =
+                        Int64.and a (Int64.xor b c)
+
+                    right =
+                        Int64.and a b
+                            |> Int64.xor (Int64.and a c)
+                in
+                Int64.toHex left
+                    |> Expect.equal (Int64.toHex right)
+        , fuzz3 fuzzInt64 fuzzInt64 fuzzInt64 "a | (b & c) = (a | b) & (a | c)" <|
+            \a b c ->
+                let
+                    left =
+                        Int64.or a (Int64.and b c)
+
+                    right =
+                        Int64.or a b
+                            |> Int64.and (Int64.or a c)
+                in
+                Int64.toHex left
+                    |> Expect.equal (Int64.toHex right)
+        , fuzz2 fuzzInt64 fuzzInt64 "~(a & b) = ~a | ~b" <|
+            \a b ->
+                let
+                    left =
+                        Int64.complement (Int64.and a b)
+
+                    right =
+                        Int64.or (Int64.complement a) (Int64.complement b)
+                in
+                Int64.toHex left
+                    |> Expect.equal (Int64.toHex right)
+        , fuzz2 fuzzInt64 fuzzInt64 "~(a | b) = ~a & ~b" <|
+            \a b ->
+                let
+                    left =
+                        Int64.complement (Int64.or a b)
+
+                    right =
+                        Int64.and (Int64.complement a) (Int64.complement b)
+                in
+                Int64.toHex left
+                    |> Expect.equal (Int64.toHex right)
+        , fuzz2 (Fuzz.tuple ( fuzzInt64, fuzzInt64 )) (Fuzz.tuple ( fuzzInt64, fuzzInt64 )) "(a ^ b) & (c ^ d) = (a & c) ^ (a & d) ^ (b & c) ^ (b & d)" <|
+            \( a, b ) ( c, d ) ->
+                let
+                    left =
+                        Int64.and (Int64.xor a b) (Int64.xor c d)
+
+                    right =
+                        Int64.and a c
+                            |> Int64.xor (Int64.and a d)
+                            |> Int64.xor (Int64.and b c)
+                            |> Int64.xor (Int64.and b d)
+                in
+                Int64.toHex left
+                    |> Expect.equal (Int64.toHex right)
+        , fuzz2 Fuzz.int Fuzz.int "addition" <|
+            \a b ->
+                Int64.add (Int64.fromInt a) (Int64.fromInt b)
+                    |> Expect.equal (Int64.fromInt (a + b))
+        , fuzz2 Fuzz.int Fuzz.int "subtraction" <|
+            \a b ->
+                Int64.subtract (Int64.fromInt a) (Int64.fromInt b)
+                    |> Expect.equal (Int64.fromInt (a - b))
+        , fuzz Fuzz.int "from int to signed string" <|
+            \a ->
+                a
+                    |> Int64.fromInt
+                    |> Int64.toSignedString
+                    |> Expect.equal (String.fromInt a)
+        , fuzz (Fuzz.map abs Fuzz.int) "from positive in to unsigned string" <|
+            \a ->
+                a
+                    |> Int64.fromInt
+                    |> Int64.toUnsignedString
+                    |> Expect.equal (String.fromInt a)
         ]
 
 
