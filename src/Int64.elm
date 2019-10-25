@@ -1,18 +1,20 @@
 module Int64 exposing
-    ( Int64(..), fromInt, fromParts
+    ( Int64, fromInt, fromParts
     , add, subtract
     , and, or, xor, complement
     , shiftLeftBy, shiftRightZfBy, rotateLeftBy, rotateRightBy
+    , signedCompare, unsignedCompare
     , toSignedString, toUnsignedString
+    , toHex, toBitString
     , decoder, encoder
-    , toHex, toByteValues, toBits, toBitString
+    , toByteValues, toBits
     )
 
-{-| An efficient 64-bit unsigned integer
+{-| An efficient 64-bit integer with correct overflow.
 
 Bitwise operators in javascript can only use 32 bits. Sometimes, external protocols use 64-bit integers. This package implementes such integers with "correct" overflow behavior.
 
-This is a low-level package focussed on speed.
+This is a low-level package focussed on speed. The 64-bit integers are represented as a 2-tuple of 32-bit numbers.
 
 @docs Int64, fromInt, fromParts
 
@@ -28,11 +30,21 @@ This is a low-level package focussed on speed.
 @docs shiftLeftBy, shiftRightZfBy, rotateLeftBy, rotateRightBy
 
 
-## Conversion
+## Compare
+
+@docs signedCompare, unsignedCompare
+
+
+## Conversion to String
 
 @docs toSignedString, toUnsignedString
+@docs toHex, toBitString
+
+
+## Conversion to Bytes
+
 @docs decoder, encoder
-@docs toHex, toByteValues, toBits, toBitString
+@docs toByteValues, toBits
 
 -}
 
@@ -43,9 +55,62 @@ import Bytes.Encode as Encode exposing (Encoder)
 import Hex
 
 
-{-| Convert a `Int` to `Int64`.
+{-| Compare two `Int64` values, intepreting the bits as an unsigned integer.
+-}
+unsignedCompare : Int64 -> Int64 -> Order
+unsignedCompare (Int64 u1 l1) (Int64 u2 l2) =
+    case Basics.compare u1 u2 of
+        EQ ->
+            Basics.compare l1 l2
 
-This is guaranteed to work for integers in the safe JS range.
+        otherwise ->
+            otherwise
+
+
+{-| Compare two `Int64` values, intepreting the bits as a signed integer.
+-}
+signedCompare : Int64 -> Int64 -> Order
+signedCompare (Int64 u1 l1) (Int64 u2 l2) =
+    let
+        isPositive1 =
+            Bitwise.and 0x80000000 u1 == 0
+
+        isPositive2 =
+            Bitwise.and 0x80000000 u2 == 0
+    in
+    case isPositive1 of
+        True ->
+            case isPositive2 of
+                True ->
+                    -- both positive
+                    case Basics.compare u1 u2 of
+                        EQ ->
+                            Basics.compare l1 l2
+
+                        otherwise ->
+                            otherwise
+
+                False ->
+                    -- 1 is positive, 2 is negative
+                    GT
+
+        False ->
+            case isPositive2 of
+                False ->
+                    -- both negative
+                    case Basics.compare u1 u2 of
+                        EQ ->
+                            Basics.compare l1 l2
+
+                        otherwise ->
+                            otherwise
+
+                True ->
+                    -- 1 is negative, 2 is positive
+                    LT
+
+
+{-| Convert a `Int` to `Int64`. This is guaranteed to work for integers in the [safe JS range](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Number/MAX_SAFE_INTEGER).
 
     fromInt 42
         |> toSignedString
@@ -89,13 +154,11 @@ fromInt raw =
 
 -}
 fromParts : Int -> Int -> Int64
-fromParts =
-    Int64
+fromParts a b =
+    Int64 (Bitwise.shiftRightZfBy 0 a) (Bitwise.shiftRightZfBy 0 b)
 
 
-{-| The individual bits
-
-Bits are given in big-endian order.
+{-| The individual bits as a list of `Bool` in big-endian order.
 
     toBits (fromInt 10)
         --> [False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,True,False,True,False]
@@ -106,7 +169,7 @@ toBits (Int64 upper lower) =
     bits32 upper ++ bits32 lower
 
 
-{-| Bits as a string
+{-| Bits as a string of `0`s and `1`s in big-endian order.
 
     toBitString (fromInt 42)
         --> "0000000000000000000000000000000000000000000000000000000000101010"
@@ -211,20 +274,9 @@ toUnsignedStringHelp upper lower accum =
         toUnsignedStringHelp (Bitwise.shiftRightZfBy 0 nextUpper) (Bitwise.shiftRightZfBy 0 nextLower) (String.cons (Char.fromCode (digit + 48)) accum)
 
 
-{-| Int64 stores two times 32 bits in two integers.
+{-| A 64-bit integer type with correct overflow behavior
 
-    -- zero
-    UnsignedInt 0 0
-
-    -- maximum value
-    Int64 0xFFFFFFFF 0xFFFFFFFF
-
-Note that technically
-
-  - you can create an integer with a higher value, e.g. `0xFFFFFFFF + 42`
-  - you can use negative numbers
-
-All operations will convert numbers to their unsigned 32-bit operation.
+Internally, the number is stored as two 32-bit integers.
 
 -}
 type Int64
@@ -263,10 +315,15 @@ xor (Int64 a b) (Int64 p q) =
 
 {-| 64-bit addition, with correct overflow
 
-    (fromParts 0xFFFFFFFF 0xFFFFFFFF)
+    fromParts 0xFFFFFFFF 0xFFFFFFFF
         |> Int64.add (Int64.fromInt 1)
         |> Int64.toUnsignedString
         --> "0"
+
+    fromParts 0xFFFFFFFF 0xFFFFFFFF
+        |> Int64.add (Int64.fromInt 2)
+        |> Int64.toUnsignedString
+        --> "1"
 
 -}
 add : Int64 -> Int64 -> Int64
@@ -293,6 +350,11 @@ add (Int64 a b) (Int64 p q) =
         |> Int64.toUnsignedString
         --> "18446744073709551615"
 
+    -- equivalent to `0 - 1`
+    Int64.subtract  (Int64.fromInt 0) (Int64.fromInt 1)
+        |> Int64.toSignedString
+        --> "-1"
+
 
     -- equivalent to `1 - 0`
     Int64.subtract  (Int64.fromInt 1) (Int64.fromInt 0)
@@ -318,6 +380,14 @@ subtract (Int64 a b) (Int64 p q) =
 
 
 {-| Left bitwise shift, typically written `<<`
+
+Fills in zeros from the right.
+
+    Int64.fromParts 0xDEADBEAF 0xBAAAAAAD
+        |> Int64.shiftLeftBy 16
+        |> Int64.toHex
+        --> "beafbaaaaaad0000"
+
 -}
 shiftLeftBy : Int -> Int64 -> Int64
 shiftLeftBy n (Int64 higher lower) =
@@ -342,6 +412,14 @@ shiftLeftBy n (Int64 higher lower) =
 
 
 {-| Right bitwise shift, typically written `>>` (but `>>>` in JavaScript)
+
+Fills in zeros from the left.
+
+    Int64.fromParts 0xDEADBEAF 0xBAAAAAAD
+        |> Int64.shiftRightZfBy 16
+        |> Int64.toHex
+        --> "0000deadbeafbaaa"
+
 -}
 shiftRightZfBy : Int -> Int64 -> Int64
 shiftRightZfBy n (Int64 higher lower) =
@@ -364,7 +442,7 @@ shiftRightZfBy n (Int64 higher lower) =
 
 {-| Left bitwise rotation
 
-    (Int64 0xDEADBEAF 0xBAAAAAAD)
+    Int64.fromParts 0xDEADBEAF 0xBAAAAAAD
         |> Int64.rotateLeftBy 16
         |> Int64.toHex
         --> "beafbaaaaaaddead"
@@ -422,7 +500,7 @@ rotateLeftBy n_ ((Int64 higher lower) as i) =
 
 {-| Right bitwise rotation
 
-    (Int64 0xDEADBEAF 0xBAAAAAAD)
+    Int64.fromParts 0xDEADBEAF 0xBAAAAAAD
         |> Int64.rotateRightBy 16
         |> Int64.toHex
         --> "aaaddeadbeafbaaa"

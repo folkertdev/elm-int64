@@ -1,7 +1,7 @@
 {
     "type": "package",
-    "name": "folkertdev/elm-unsigned64",
-    "summary": "Efficient 64-bit unsigned integer",
+    "name": "folkertdev/elm-int64",
+    "summary": "Efficient 64-bit (unsigned) integer",
     "license": "BSD-3-Clause",
     "version": "1.0.0",
     "exposed-modules": [
