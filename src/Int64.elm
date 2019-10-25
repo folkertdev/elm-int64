@@ -55,59 +55,13 @@ import Bytes.Encode as Encode exposing (Encoder)
 import Hex
 
 
-{-| Compare two `Int64` values, intepreting the bits as an unsigned integer.
+{-| A 64-bit integer type with correct overflow behavior
+
+Internally, the number is stored as two 32-bit integers.
+
 -}
-unsignedCompare : Int64 -> Int64 -> Order
-unsignedCompare (Int64 u1 l1) (Int64 u2 l2) =
-    case Basics.compare u1 u2 of
-        EQ ->
-            Basics.compare l1 l2
-
-        otherwise ->
-            otherwise
-
-
-{-| Compare two `Int64` values, intepreting the bits as a signed integer.
--}
-signedCompare : Int64 -> Int64 -> Order
-signedCompare (Int64 u1 l1) (Int64 u2 l2) =
-    let
-        isPositive1 =
-            Bitwise.and 0x80000000 u1 == 0
-
-        isPositive2 =
-            Bitwise.and 0x80000000 u2 == 0
-    in
-    case isPositive1 of
-        True ->
-            case isPositive2 of
-                True ->
-                    -- both positive
-                    case Basics.compare u1 u2 of
-                        EQ ->
-                            Basics.compare l1 l2
-
-                        otherwise ->
-                            otherwise
-
-                False ->
-                    -- 1 is positive, 2 is negative
-                    GT
-
-        False ->
-            case isPositive2 of
-                False ->
-                    -- both negative
-                    case Basics.compare u1 u2 of
-                        EQ ->
-                            Basics.compare l1 l2
-
-                        otherwise ->
-                            otherwise
-
-                True ->
-                    -- 1 is negative, 2 is positive
-                    LT
+type Int64
+    = Int64 Int Int
 
 
 {-| Convert a `Int` to `Int64`. This is guaranteed to work for integers in the [safe JS range](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Number/MAX_SAFE_INTEGER).
@@ -158,159 +112,8 @@ fromParts a b =
     Int64 (Bitwise.shiftRightZfBy 0 a) (Bitwise.shiftRightZfBy 0 b)
 
 
-{-| The individual bits as a list of `Bool` in big-endian order.
 
-    toBits (fromInt 10)
-        --> [False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,True,False,True,False]
-
--}
-toBits : Int64 -> List Bool
-toBits (Int64 upper lower) =
-    bits32 upper ++ bits32 lower
-
-
-{-| Bits as a string of `0`s and `1`s in big-endian order.
-
-    toBitString (fromInt 42)
-        --> "0000000000000000000000000000000000000000000000000000000000101010"
-
--}
-toBitString : Int64 -> String
-toBitString input =
-    toBits input
-        |> List.foldr
-            (\b accum ->
-                case b of
-                    True ->
-                        String.cons '1' accum
-
-                    False ->
-                        String.cons '0' accum
-            )
-            ""
-
-
-bits32 : Int -> List Bool
-bits32 value =
-    bits32Help 32 value []
-
-
-bits32Help n remaining accum =
-    if n > 0 then
-        let
-            new =
-                Bitwise.and 1 remaining == 1
-        in
-        bits32Help (n - 1) (Bitwise.shiftRightZfBy 1 remaining) (new :: accum)
-
-    else
-        accum
-
-
-{-| Interpret a `Int64` as an unsigned integer, and give its string representation
-
-    toSignedString (fromInt 10)
-        --> "10"
-
-    toSignedString (fromInt -10)
-        --> "-10"
-
--}
-toSignedString : Int64 -> String
-toSignedString ((Int64 origUpper origLower) as input) =
-    let
-        isPositive =
-            Bitwise.and (Bitwise.shiftLeftBy 31 1) upper /= 0
-
-        (Int64 upper lower) =
-            complement input
-
-        newLower =
-            lower + 1
-
-        newUpper =
-            if newLower > 0xFFFFFFFF then
-                upper
-
-            else
-                upper
-    in
-    if isPositive then
-        toUnsignedStringHelp origUpper origLower ""
-
-    else
-        "-" ++ toUnsignedStringHelp newUpper newLower ""
-
-
-{-| Interpret a `Int64` as an unsigned integer, and give its string representation
-
-    toUnsignedString (fromInt 10)
-        --> "10"
-
-    toUnsignedString (fromInt -10)
-        --> "18446744073709551606"
-
--}
-toUnsignedString : Int64 -> String
-toUnsignedString ((Int64 upper lower) as input) =
-    toUnsignedStringHelp upper lower ""
-
-
-toUnsignedStringHelp upper lower accum =
-    let
-        digit =
-            ((upper |> modBy 10) * (2 ^ 32) + lower) |> modBy 10
-
-        nextUpper =
-            upper // 10
-
-        nextLower =
-            ((upper |> modBy 10) * (2 ^ 32) + lower) // 10
-    in
-    if lower < 10 && upper == 0 then
-        String.cons (Char.fromCode (digit + 48)) accum
-
-    else
-        toUnsignedStringHelp (Bitwise.shiftRightZfBy 0 nextUpper) (Bitwise.shiftRightZfBy 0 nextLower) (String.cons (Char.fromCode (digit + 48)) accum)
-
-
-{-| A 64-bit integer type with correct overflow behavior
-
-Internally, the number is stored as two 32-bit integers.
-
--}
-type Int64
-    = Int64 Int Int
-
-
-{-| Bitwise and
--}
-and : Int64 -> Int64 -> Int64
-and (Int64 a b) (Int64 p q) =
-    Int64 (Bitwise.and a p) (Bitwise.and b q)
-
-
-{-| Bitwise complement
--}
-complement : Int64 -> Int64
-complement (Int64 a b) =
-    Int64
-        (Bitwise.complement a |> Bitwise.shiftRightZfBy 0)
-        (Bitwise.complement b |> Bitwise.shiftRightZfBy 0)
-
-
-{-| Bitwise or
--}
-or : Int64 -> Int64 -> Int64
-or (Int64 a b) (Int64 p q) =
-    Int64 (Bitwise.or a p) (Bitwise.or b q)
-
-
-{-| Bitwise xor
--}
-xor : Int64 -> Int64 -> Int64
-xor (Int64 a b) (Int64 p q) =
-    Int64 (Bitwise.xor a p) (Bitwise.xor b q)
+-- ARITHMETIC
 
 
 {-| 64-bit addition, with correct overflow
@@ -377,6 +180,40 @@ subtract (Int64 a b) (Int64 p q) =
 
     else
         Int64 (Bitwise.shiftRightZfBy 0 higher) (Bitwise.shiftRightZfBy 0 lower)
+
+
+
+-- BITWISE
+
+
+{-| Bitwise and
+-}
+and : Int64 -> Int64 -> Int64
+and (Int64 a b) (Int64 p q) =
+    Int64 (Bitwise.and a p) (Bitwise.and b q)
+
+
+{-| Bitwise complement
+-}
+complement : Int64 -> Int64
+complement (Int64 a b) =
+    Int64
+        (Bitwise.complement a |> Bitwise.shiftRightZfBy 0)
+        (Bitwise.complement b |> Bitwise.shiftRightZfBy 0)
+
+
+{-| Bitwise or
+-}
+or : Int64 -> Int64 -> Int64
+or (Int64 a b) (Int64 p q) =
+    Int64 (Bitwise.or a p) (Bitwise.or b q)
+
+
+{-| Bitwise xor
+-}
+xor : Int64 -> Int64 -> Int64
+xor (Int64 a b) (Int64 p q) =
+    Int64 (Bitwise.xor a p) (Bitwise.xor b q)
 
 
 {-| Left bitwise shift, typically written `<<`
@@ -570,6 +407,181 @@ rotateRightBy n_ ((Int64 higher lower) as i) =
 
 
 
+-- COMPARISON
+
+
+{-| Compare two `Int64` values, intepreting the bits as an unsigned integer.
+-}
+unsignedCompare : Int64 -> Int64 -> Order
+unsignedCompare (Int64 u1 l1) (Int64 u2 l2) =
+    case Basics.compare u1 u2 of
+        EQ ->
+            Basics.compare l1 l2
+
+        otherwise ->
+            otherwise
+
+
+{-| Compare two `Int64` values, intepreting the bits as a signed integer.
+-}
+signedCompare : Int64 -> Int64 -> Order
+signedCompare (Int64 u1 l1) (Int64 u2 l2) =
+    let
+        isPositive1 =
+            Bitwise.and 0x80000000 u1 == 0
+
+        isPositive2 =
+            Bitwise.and 0x80000000 u2 == 0
+    in
+    case isPositive1 of
+        True ->
+            case isPositive2 of
+                True ->
+                    -- both positive
+                    case Basics.compare u1 u2 of
+                        EQ ->
+                            Basics.compare l1 l2
+
+                        otherwise ->
+                            otherwise
+
+                False ->
+                    -- 1 is positive, 2 is negative
+                    GT
+
+        False ->
+            case isPositive2 of
+                False ->
+                    -- both negative
+                    case Basics.compare u1 u2 of
+                        EQ ->
+                            Basics.compare l1 l2
+
+                        otherwise ->
+                            otherwise
+
+                True ->
+                    -- 1 is negative, 2 is positive
+                    LT
+
+
+
+-- STRING CONVERSION
+
+
+{-| Bits as a string of `0`s and `1`s in big-endian order.
+
+    toBitString (fromInt 42)
+        --> "0000000000000000000000000000000000000000000000000000000000101010"
+
+-}
+toBitString : Int64 -> String
+toBitString input =
+    toBits input
+        |> List.foldr
+            (\b accum ->
+                case b of
+                    True ->
+                        String.cons '1' accum
+
+                    False ->
+                        String.cons '0' accum
+            )
+            ""
+
+
+{-| Interpret a `Int64` as an unsigned integer, and give its string representation
+
+    toSignedString (fromInt 10)
+        --> "10"
+
+    toSignedString (fromInt -10)
+        --> "-10"
+
+-}
+toSignedString : Int64 -> String
+toSignedString ((Int64 origUpper origLower) as input) =
+    let
+        isPositive =
+            Bitwise.and (Bitwise.shiftLeftBy 31 1) upper /= 0
+
+        (Int64 upper lower) =
+            complement input
+
+        newLower =
+            lower + 1
+
+        newUpper =
+            if newLower > 0xFFFFFFFF then
+                upper
+
+            else
+                upper
+    in
+    if isPositive then
+        toUnsignedStringHelp origUpper origLower ""
+
+    else
+        "-" ++ toUnsignedStringHelp newUpper newLower ""
+
+
+{-| Interpret a `Int64` as an unsigned integer, and give its string representation
+
+    toUnsignedString (fromInt 10)
+        --> "10"
+
+    toUnsignedString (fromInt -10)
+        --> "18446744073709551606"
+
+-}
+toUnsignedString : Int64 -> String
+toUnsignedString ((Int64 upper lower) as input) =
+    toUnsignedStringHelp upper lower ""
+
+
+toUnsignedStringHelp upper lower accum =
+    let
+        digit =
+            ((upper |> modBy 10) * (2 ^ 32) + lower) |> modBy 10
+
+        nextUpper =
+            upper // 10
+
+        nextLower =
+            ((upper |> modBy 10) * (2 ^ 32) + lower) // 10
+    in
+    if lower < 10 && upper == 0 then
+        String.cons (Char.fromCode (digit + 48)) accum
+
+    else
+        toUnsignedStringHelp (Bitwise.shiftRightZfBy 0 nextUpper) (Bitwise.shiftRightZfBy 0 nextLower) (String.cons (Char.fromCode (digit + 48)) accum)
+
+
+{-| Convert a `Int64` to a hexadecimal string
+
+    toHex (fromInt (256 - 1))
+        -->  "00000000000000ff"
+
+-}
+toHex : Int64 -> String
+toHex (Int64 higher lower) =
+    let
+        high =
+            higher
+                |> Bitwise.shiftRightZfBy 0
+                |> Hex.toString
+                |> String.padLeft 8 '0'
+
+        low =
+            lower
+                |> Bitwise.shiftRightZfBy 0
+                |> Hex.toString
+                |> String.padLeft 8 '0'
+    in
+    high ++ low
+
+
+
 -- Bytes
 
 
@@ -607,30 +619,6 @@ encoder endianness (Int64 higher lower) =
                 ]
 
 
-{-| Convert a `Int64` to a hexadecimal string
-
-    toHex (fromInt (256 - 1))
-        -->  "00000000000000ff"
-
--}
-toHex : Int64 -> String
-toHex (Int64 higher lower) =
-    let
-        high =
-            higher
-                |> Bitwise.shiftRightZfBy 0
-                |> Hex.toString
-                |> String.padLeft 8 '0'
-
-        low =
-            lower
-                |> Bitwise.shiftRightZfBy 0
-                |> Hex.toString
-                |> String.padLeft 8 '0'
-    in
-    high ++ low
-
-
 {-| Convert an `Int64` to its 8 byte values in big-endian order
 
     toByteValues  (fromInt 0xDEADBEAF)
@@ -649,3 +637,31 @@ wordToBytes int =
     , int |> Bitwise.shiftRightZfBy 0x08 |> Bitwise.and 0xFF
     , int |> Bitwise.and 0xFF
     ]
+
+
+{-| The individual bits as a list of `Bool` in big-endian order.
+
+    toBits (fromInt 10)
+        --> [False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,True,False,True,False]
+
+-}
+toBits : Int64 -> List Bool
+toBits (Int64 upper lower) =
+    bits32 upper ++ bits32 lower
+
+
+bits32 : Int -> List Bool
+bits32 value =
+    bits32Help 32 value []
+
+
+bits32Help n remaining accum =
+    if n > 0 then
+        let
+            new =
+                Bitwise.and 1 remaining == 1
+        in
+        bits32Help (n - 1) (Bitwise.shiftRightZfBy 1 remaining) (new :: accum)
+
+    else
+        accum
