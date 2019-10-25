@@ -1,4 +1,4 @@
 {
   "root": "../src",
-  "tests": ["Int64"]
+  "tests": ["Int64", "README.md"]
 }
