@@ -1,5 +1,6 @@
 module TestInt64 exposing (..)
 
+import Bitwise
 import Expect exposing (Expectation)
 import Fuzz exposing (Fuzzer, int, list, string)
 import Int64 exposing (Int64(..))
@@ -12,6 +13,57 @@ maxInt64 =
 
 y =
     Int64 0x01 0xFFFFFFFF
+
+
+fuzz2 a b name thunk =
+    fuzz (Fuzz.tuple ( a, b )) name <| \( x, p ) -> thunk x p
+
+
+fuzzTests =
+    describe "fuzz tests"
+        [ fuzz2 (Fuzz.intRange 0 64) (Fuzz.map Int64.fromInt Fuzz.int) "rotateLeftBy n << rotateRightBy n = id" <|
+            \n value ->
+                value
+                    |> Int64.rotateRightBy n
+                    |> Int64.rotateLeftBy n
+                    |> Int64.toHex
+                    |> Expect.equal (Int64.toHex value)
+        , fuzz2 (Fuzz.intRange 0 64) (Fuzz.map Int64.fromInt Fuzz.int) "rotateRightBy n << rotateLeftBy n = id" <|
+            \n value ->
+                value
+                    |> Int64.rotateLeftBy n
+                    |> Int64.rotateRightBy n
+                    |> Int64.toHex
+                    |> Expect.equal (Int64.toHex value)
+        ]
+
+
+rotateLeftBy =
+    let
+        helper input n output =
+            test ("rotateLeftBy " ++ String.fromInt n ++ " " ++ Int64.toHex input) <|
+                \_ ->
+                    input
+                        |> Int64.rotateLeftBy n
+                        |> Int64.toBitString
+                        |> Expect.equal (output |> Int64.toBitString)
+    in
+    describe "rotate left by"
+        [ helper (Int64 0 1) 1 (Int64 0 2)
+        , helper (Int64 0 2) 1 (Int64 0 4)
+        , helper (Int64 0 4) 1 (Int64 0 8)
+        , helper (Int64 0 8) 1 (Int64 0 16)
+        , helper (Int64 0 0x80000000) 1 (Int64 1 0)
+        , helper (Int64 0 1) 15 (Int64 0 (Bitwise.shiftLeftBy 15 1))
+        , helper (Int64 0 1) 16 (Int64 0 (Bitwise.shiftLeftBy 16 1))
+        , helper (Int64 0 1) 30 (Int64 0 (Bitwise.shiftLeftBy 30 1))
+        , helper (Int64 0 1) 31 (Int64 0 (Bitwise.shiftLeftBy 31 1))
+        , helper (Int64 0 1) 32 (Int64 1 0)
+        , helper (Int64 0x80000000 0) 1 (Int64 0 1)
+        , helper (Int64 0x80000000 0) 31 (Int64 0 (Bitwise.shiftLeftBy 30 1))
+        , helper (Int64 0x80000000 0) 32 (Int64 0 (Bitwise.shiftLeftBy 31 1))
+        , helper (Int64 0x80000000 0) 64 (Int64 0x80000000 0)
+        ]
 
 
 suite : Test

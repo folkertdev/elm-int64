@@ -2,10 +2,11 @@ module Int64 exposing
     ( Int64(..), fromInt
     , add, subtract
     , and, or, xor, complement
-    , shiftLeftBy, shiftRightZfBy, rotateRightBy
+    , shiftLeftBy, shiftRightZfBy, rotateLeftBy, rotateRightBy
     , toSignedString, toUnsignedString
     , decoder, encoder
-    , toHex, toByteValues
+    , toHex, toByteValues, toBits
+    , toBitString
     )
 
 {-| An efficient 64-bit unsigned integer
@@ -32,7 +33,7 @@ This is a low-level package focussed on speed.
 
 @docs toSignedString, toUnsignedString
 @docs decoder, encoder
-@docs toHex, toByteValues
+@docs toHex, toByteValues, toBits
 
 -}
 
@@ -72,9 +73,29 @@ fromInt raw =
         Int64 0 raw
 
 
-bits : Int64 -> List Bool
-bits (Int64 upper lower) =
+{-| The individual bits
+
+Bits are given in big-endian order.
+
+-}
+toBits : Int64 -> List Bool
+toBits (Int64 upper lower) =
     bits32 upper ++ bits32 lower
+
+
+toBitString : Int64 -> String
+toBitString input =
+    toBits input
+        |> List.foldr
+            (\b accum ->
+                case b of
+                    True ->
+                        String.cons '1' accum
+
+                    False ->
+                        String.cons '0' accum
+            )
+            ""
 
 
 bits32 : Int -> List Bool
@@ -92,27 +113,6 @@ bits32Help n remaining accum =
 
     else
         accum
-
-
-toBits : Int64 -> String
-toBits input =
-    let
-        (Int64 upper lower) =
-            complement input
-                |> add (Int64 0 1)
-    in
-    -- String.fromInt upper ++ String.fromInt lower
-    List.foldl
-        (\value accum ->
-            if value then
-                accum ++ "1"
-
-            else
-                accum ++ "0"
-        )
-        ""
-        (bits input)
-        |> String.padLeft 64 '0'
 
 
 toSignedString : Int64 -> String
@@ -281,9 +281,69 @@ shiftRightZfBy n (Int64 higher lower) =
         Int64 (Bitwise.shiftRightZfBy n higher) newLower
 
 
+rotateLeftBy : Int -> Int64 -> Int64
+rotateLeftBy n_ ((Int64 higher lower) as i) =
+    let
+        n =
+            n_ |> modBy 64
+    in
+    if n == 32 then
+        Int64 lower higher
+
+    else if n == 0 then
+        Int64 higher lower
+
+    else if n >= 32 then
+        let
+            -- guaranteed m <= 32
+            m =
+                64 - n
+
+            carry1 =
+                Bitwise.shiftLeftBy (n - 32) lower
+
+            carry2 =
+                Bitwise.shiftRightZfBy (32 - (n - 32)) higher
+
+            carry3 =
+                Bitwise.shiftLeftBy (n - 32) higher
+
+            carry4 =
+                Bitwise.shiftRightZfBy (32 - (n - 32)) lower
+        in
+        Int64 (Bitwise.or carry1 carry2) (Bitwise.or carry3 carry4)
+
+    else
+        -- n <= 32, m > 32
+        let
+            carry1 =
+                Bitwise.shiftLeftBy n lower
+
+            carry2 =
+                Bitwise.shiftRightZfBy (32 - n) higher
+
+            carry3 =
+                Bitwise.shiftLeftBy n higher
+
+            carry4 =
+                Bitwise.shiftRightZfBy (32 - n) lower
+        in
+        Int64 (Bitwise.or carry3 carry4) (Bitwise.or carry1 carry2)
+
+
 rotateRightBy : Int -> Int64 -> Int64
-rotateRightBy n ((Int64 higher lower) as i) =
-    if n > 32 then
+rotateRightBy n_ ((Int64 higher lower) as i) =
+    let
+        n =
+            n_ |> modBy 64
+    in
+    if n == 32 then
+        Int64 lower higher
+
+    else if n == 0 then
+        Int64 higher lower
+
+    else if n > 32 then
         let
             -- guaranteed m <= 32
             m =
