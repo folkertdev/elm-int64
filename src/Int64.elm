@@ -1,12 +1,11 @@
 module Int64 exposing
-    ( Int64(..), fromInt
+    ( Int64(..), fromInt, fromParts
     , add, subtract
     , and, or, xor, complement
     , shiftLeftBy, shiftRightZfBy, rotateLeftBy, rotateRightBy
     , toSignedString, toUnsignedString
     , decoder, encoder
-    , toHex, toByteValues, toBits
-    , toBitString
+    , toHex, toByteValues, toBits, toBitString
     )
 
 {-| An efficient 64-bit unsigned integer
@@ -15,7 +14,7 @@ Bitwise operators in javascript can only use 32 bits. Sometimes, external protoc
 
 This is a low-level package focussed on speed.
 
-@docs Int64, fromInt
+@docs Int64, fromInt, fromParts
 
 
 ## Arithmetic
@@ -33,7 +32,7 @@ This is a low-level package focussed on speed.
 
 @docs toSignedString, toUnsignedString
 @docs decoder, encoder
-@docs toHex, toByteValues, toBits
+@docs toHex, toByteValues, toBits, toBitString
 
 -}
 
@@ -44,6 +43,15 @@ import Bytes.Encode as Encode exposing (Encoder)
 import Hex
 
 
+{-| Convert a `Int` to `Int64`.
+
+This is guaranteed to work for integers in the safe JS range.
+
+    fromInt 42
+        |> toSignedString
+        --> "42"
+
+-}
 fromInt : Int -> Int64
 fromInt raw =
     if raw < 0 then
@@ -73,9 +81,24 @@ fromInt raw =
         Int64 0 raw
 
 
+{-| Give two integers, corresponding to the upper and lower 32 bits
+
+    fromParts 4 2
+        |> toHex
+        --> "0000000400000002"
+
+-}
+fromParts : Int -> Int -> Int64
+fromParts =
+    Int64
+
+
 {-| The individual bits
 
 Bits are given in big-endian order.
+
+    toBits (fromInt 10)
+        --> [False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,False,True,False,True,False]
 
 -}
 toBits : Int64 -> List Bool
@@ -83,6 +106,12 @@ toBits (Int64 upper lower) =
     bits32 upper ++ bits32 lower
 
 
+{-| Bits as a string
+
+    toBitString (fromInt 42)
+        --> "0000000000000000000000000000000000000000000000000000000000101010"
+
+-}
 toBitString : Int64 -> String
 toBitString input =
     toBits input
@@ -115,6 +144,15 @@ bits32Help n remaining accum =
         accum
 
 
+{-| Interpret a `Int64` as an unsigned integer, and give its string representation
+
+    toSignedString (fromInt 10)
+        --> "10"
+
+    toSignedString (fromInt -10)
+        --> "-10"
+
+-}
 toSignedString : Int64 -> String
 toSignedString ((Int64 origUpper origLower) as input) =
     let
@@ -141,6 +179,15 @@ toSignedString ((Int64 origUpper origLower) as input) =
         "-" ++ toUnsignedStringHelp newUpper newLower ""
 
 
+{-| Interpret a `Int64` as an unsigned integer, and give its string representation
+
+    toUnsignedString (fromInt 10)
+        --> "10"
+
+    toUnsignedString (fromInt -10)
+        --> "18446744073709551606"
+
+-}
 toUnsignedString : Int64 -> String
 toUnsignedString ((Int64 upper lower) as input) =
     toUnsignedStringHelp upper lower ""
@@ -184,11 +231,15 @@ type Int64
     = Int64 Int Int
 
 
+{-| Bitwise and
+-}
 and : Int64 -> Int64 -> Int64
 and (Int64 a b) (Int64 p q) =
     Int64 (Bitwise.and a p) (Bitwise.and b q)
 
 
+{-| Bitwise complement
+-}
 complement : Int64 -> Int64
 complement (Int64 a b) =
     Int64
@@ -196,16 +247,28 @@ complement (Int64 a b) =
         (Bitwise.complement b |> Bitwise.shiftRightZfBy 0)
 
 
+{-| Bitwise or
+-}
 or : Int64 -> Int64 -> Int64
 or (Int64 a b) (Int64 p q) =
     Int64 (Bitwise.or a p) (Bitwise.or b q)
 
 
+{-| Bitwise xor
+-}
 xor : Int64 -> Int64 -> Int64
 xor (Int64 a b) (Int64 p q) =
     Int64 (Bitwise.xor a p) (Bitwise.xor b q)
 
 
+{-| 64-bit addition, with correct overflow
+
+    (fromParts 0xFFFFFFFF 0xFFFFFFFF)
+        |> Int64.add (Int64.fromInt 1)
+        |> Int64.toUnsignedString
+        --> "0"
+
+-}
 add : Int64 -> Int64 -> Int64
 add (Int64 a b) (Int64 p q) =
     let
@@ -223,6 +286,20 @@ add (Int64 a b) (Int64 p q) =
         Int64 (Bitwise.shiftRightZfBy 0 higher) (Bitwise.shiftRightZfBy 0 lower)
 
 
+{-| 64-bit subtraction, with correct overflow
+
+    -- equivalent to `0 - 1`
+    Int64.subtract  (Int64.fromInt 0) (Int64.fromInt 1)
+        |> Int64.toUnsignedString
+        --> "18446744073709551615"
+
+
+    -- equivalent to `1 - 0`
+    Int64.subtract  (Int64.fromInt 1) (Int64.fromInt 0)
+        |> Int64.toUnsignedString
+        --> "1"
+
+-}
 subtract : Int64 -> Int64 -> Int64
 subtract (Int64 a b) (Int64 p q) =
     let
@@ -240,6 +317,8 @@ subtract (Int64 a b) (Int64 p q) =
         Int64 (Bitwise.shiftRightZfBy 0 higher) (Bitwise.shiftRightZfBy 0 lower)
 
 
+{-| Left bitwise shift, typically written `<<`
+-}
 shiftLeftBy : Int -> Int64 -> Int64
 shiftLeftBy n (Int64 higher lower) =
     if n > 32 then
@@ -262,6 +341,8 @@ shiftLeftBy n (Int64 higher lower) =
         Int64 newHigher (Bitwise.shiftLeftBy n lower)
 
 
+{-| Right bitwise shift, typically written `>>` (but `>>>` in JavaScript)
+-}
 shiftRightZfBy : Int -> Int64 -> Int64
 shiftRightZfBy n (Int64 higher lower) =
     if n > 32 then
@@ -281,6 +362,14 @@ shiftRightZfBy n (Int64 higher lower) =
         Int64 (Bitwise.shiftRightZfBy n higher) newLower
 
 
+{-| Left bitwise rotation
+
+    (Int64 0xDEADBEAF 0xBAAAAAAD)
+        |> Int64.rotateLeftBy 16
+        |> Int64.toHex
+        --> "beafbaaaaaaddead"
+
+-}
 rotateLeftBy : Int -> Int64 -> Int64
 rotateLeftBy n_ ((Int64 higher lower) as i) =
     let
@@ -331,6 +420,14 @@ rotateLeftBy n_ ((Int64 higher lower) as i) =
         Int64 (Bitwise.or carry3 carry4) (Bitwise.or carry1 carry2)
 
 
+{-| Right bitwise rotation
+
+    (Int64 0xDEADBEAF 0xBAAAAAAD)
+        |> Int64.rotateRightBy 16
+        |> Int64.toHex
+        --> "aaaddeadbeafbaaa"
+
+-}
 rotateRightBy : Int -> Int64 -> Int64
 rotateRightBy n_ ((Int64 higher lower) as i) =
     let
@@ -398,6 +495,8 @@ rotateRightBy n_ ((Int64 higher lower) as i) =
 -- Bytes
 
 
+{-| A `elm/bytes` Decoder for `Int64`
+-}
 decoder : Endianness -> Decoder Int64
 decoder endianness =
     case endianness of
@@ -407,11 +506,13 @@ decoder endianness =
                 (Decode.unsignedInt32 BE)
 
         LE ->
-            Decode.map2 Int64
+            Decode.map2 (\lower higher -> Int64 higher lower)
                 (Decode.unsignedInt32 LE)
                 (Decode.unsignedInt32 LE)
 
 
+{-| A `elm/bytes` Encoder for `Int64`
+-}
 encoder : Endianness -> Int64 -> Encoder
 encoder endianness (Int64 higher lower) =
     case endianness of
@@ -428,6 +529,12 @@ encoder endianness (Int64 higher lower) =
                 ]
 
 
+{-| Convert a `Int64` to a hexadecimal string
+
+    toHex (fromInt (256 - 1))
+        -->  "00000000000000ff"
+
+-}
 toHex : Int64 -> String
 toHex (Int64 higher lower) =
     let
@@ -446,6 +553,12 @@ toHex (Int64 higher lower) =
     high ++ low
 
 
+{-| Convert an `Int64` to its 8 byte values in big-endian order
+
+    toByteValues  (fromInt 0xDEADBEAF)
+        --> [0,0,0,0,222,173,190,175]
+
+-}
 toByteValues : Int64 -> List Int
 toByteValues (Int64 higher lower) =
     wordToBytes higher ++ wordToBytes lower

@@ -1,6 +1,9 @@
 module TestInt64 exposing (..)
 
 import Bitwise
+import Bytes exposing (Endianness(..))
+import Bytes.Decode as Decode
+import Bytes.Encode as Encode
 import Expect exposing (Expectation)
 import Fuzz exposing (Fuzzer, int, list, string)
 import Int64 exposing (Int64(..))
@@ -24,7 +27,7 @@ fuzz3 a b c name thunk =
 
 
 fuzzInt64 =
-    Fuzz.map Int64.fromInt Fuzz.int
+    Fuzz.map2 Int64.fromParts (Fuzz.intRange 0 0xFFFFFFFF) (Fuzz.intRange 0 0xFFFFFFFF)
 
 
 fuzzTests =
@@ -145,6 +148,20 @@ fuzzTests =
                     |> Int64.fromInt
                     |> Int64.toUnsignedString
                     |> Expect.equal (String.fromInt a)
+        , fuzz fuzzInt64 "decode BE << encode BE = id" <|
+            \a ->
+                a
+                    |> Int64.encoder BE
+                    |> Encode.encode
+                    |> Decode.decode (Int64.decoder BE)
+                    |> Expect.equal (Just a)
+        , fuzz fuzzInt64 "decode LE << encode LE = id" <|
+            \a ->
+                a
+                    |> Int64.encoder LE
+                    |> Encode.encode
+                    |> Decode.decode (Int64.decoder LE)
+                    |> Expect.equal (Just a)
         ]
 
 
