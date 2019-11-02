@@ -1,5 +1,5 @@
 module Int64 exposing
-    ( Int64, fromInt, fromParts
+    ( Int64, fromInt, fromInt32s
     , add, subtract
     , and, or, xor, complement
     , shiftLeftBy, shiftRightZfBy, rotateLeftBy, rotateRightBy
@@ -16,7 +16,7 @@ Bitwise operators in javascript can only use 32 bits. Sometimes, external protoc
 
 This is a low-level package focussed on speed. The 64-bit integers are represented as a 2-tuple of 32-bit numbers.
 
-@docs Int64, fromInt, fromParts
+@docs Int64, fromInt, fromInt32s
 
 
 ## Arithmetic
@@ -102,13 +102,13 @@ fromInt raw =
 
 {-| Give two integers, corresponding to the upper and lower 32 bits
 
-    fromParts 4 2
+    fromInt32s 4 2
         |> toHex
         --> "0000000400000002"
 
 -}
-fromParts : Int -> Int -> Int64
-fromParts a b =
+fromInt32s : Int -> Int -> Int64
+fromInt32s a b =
     Int64 (Bitwise.shiftRightZfBy 0 a) (Bitwise.shiftRightZfBy 0 b)
 
 
@@ -118,12 +118,12 @@ fromParts a b =
 
 {-| 64-bit addition, with correct overflow
 
-    fromParts 0xFFFFFFFF 0xFFFFFFFF
+    fromInt32s 0xFFFFFFFF 0xFFFFFFFF
         |> Int64.add (Int64.fromInt 1)
         |> Int64.toUnsignedString
         --> "0"
 
-    fromParts 0xFFFFFFFF 0xFFFFFFFF
+    fromInt32s 0xFFFFFFFF 0xFFFFFFFF
         |> Int64.add (Int64.fromInt 2)
         |> Int64.toUnsignedString
         --> "1"
@@ -220,7 +220,7 @@ xor (Int64 a b) (Int64 p q) =
 
 Fills in zeros from the right.
 
-    Int64.fromParts 0xDEADBEAF 0xBAAAAAAD
+    Int64.fromInt32s 0xDEADBEAF 0xBAAAAAAD
         |> Int64.shiftLeftBy 16
         |> Int64.toHex
         --> "beafbaaaaaad0000"
@@ -252,7 +252,7 @@ shiftLeftBy n (Int64 higher lower) =
 
 Fills in zeros from the left.
 
-    Int64.fromParts 0xDEADBEAF 0xBAAAAAAD
+    Int64.fromInt32s 0xDEADBEAF 0xBAAAAAAD
         |> Int64.shiftRightZfBy 16
         |> Int64.toHex
         --> "0000deadbeafbaaa"
@@ -279,7 +279,7 @@ shiftRightZfBy n (Int64 higher lower) =
 
 {-| Left bitwise rotation
 
-    Int64.fromParts 0xDEADBEAF 0xBAAAAAAD
+    Int64.fromInt32s 0xDEADBEAF 0xBAAAAAAD
         |> Int64.rotateLeftBy 16
         |> Int64.toHex
         --> "beafbaaaaaaddead"
@@ -337,7 +337,7 @@ rotateLeftBy n_ ((Int64 higher lower) as i) =
 
 {-| Right bitwise rotation
 
-    Int64.fromParts 0xDEADBEAF 0xBAAAAAAD
+    Int64.fromInt32s 0xDEADBEAF 0xBAAAAAAD
         |> Int64.rotateRightBy 16
         |> Int64.toHex
         --> "aaaddeadbeafbaaa"

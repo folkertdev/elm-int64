@@ -18,7 +18,7 @@ Int64.subtract (Int64.fromInt 10) (Int64.fromInt 42)
     --> "-32"
 
 Int64.xor 
-    (Int64.fromParts 0xDEADBEEF 0xBAAAAAAD) 
+    (Int64.fromInt32s 0xDEADBEEF 0xBAAAAAAD) 
     (Int64.fromInt 42)
     |> Int64.toHex
     --> "deadbeefbaaaaa87"
@@ -44,7 +44,7 @@ This package is extensively tested with fuzz tests. Nonetheless, the logic is ex
     ```elm
     Int64.fromInt 42
         |> Int64.toSignedString
-        |> String.fromInt
+        |> String.toInt
         --> Just 42
     ```
 
