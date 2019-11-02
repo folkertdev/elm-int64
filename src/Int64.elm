@@ -263,6 +263,9 @@ shiftRightZfBy n (Int64 higher lower) =
     if n > 32 then
         Int64 0 (Bitwise.shiftRightZfBy n higher)
 
+    else if n == 32 then
+        Int64 0 higher
+
     else
         let
             carry =
