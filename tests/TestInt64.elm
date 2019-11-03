@@ -650,3 +650,26 @@ addGenerated =
         , testOverflow (Int64.fromInt32s 0xB52FE20C 0xC14D29E8) (Int64.fromInt32s 0x4BD59D9F 0x97447D87) (Int64.fromInt32s 0x01057FAC 0x5891A76F)
         , testOverflow (Int64.fromInt32s 0x0136BECF 0x9DC53FD8) (Int64.fromInt32s 0xFB0D6489 0xE90C3B3E) (Int64.fromInt32s 0xFC442359 0x86D17B16)
         ]
+
+
+shiftRightZfBy =
+    describe "shiftRightZfBy"
+        [ test "works for n < 32" <|
+            \_ ->
+                Int64.fromInt32s 0xCAFEBABE 0xFFFFFFFF
+                    |> Int64.shiftRightZfBy 28
+                    |> Int64.toHex
+                    |> Expect.equal (Int64.fromInt32s 0x0C 0xAFEBABEF |> Int64.toHex)
+        , test "works for n == 32" <|
+            \_ ->
+                Int64.fromInt32s 0xCAFEBABE 0xFFFFFFFF
+                    |> Int64.shiftRightZfBy 32
+                    |> Int64.toHex
+                    |> Expect.equal (Int64.fromInt32s 0 0xCAFEBABE |> Int64.toHex)
+        , test "works for n > 32" <|
+            \_ ->
+                Int64.fromInt32s 0xCAFEBABE 0xFFFFFFFF
+                    |> Int64.shiftRightZfBy 36
+                    |> Int64.toHex
+                    |> Expect.equal (Int64.fromInt32s 0 0x0CAFEBAB |> Int64.toHex)
+        ]
