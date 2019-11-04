@@ -30,7 +30,7 @@ Int64.xor
 Performance is roughly half for subtraction, addition and the bitwise operators. That is great considering int64 is really two 32-bit integers, so we're doing operations twice.
 
 
-## Reliabiltiy
+## Reliability
 
 This package is extensively tested with fuzz tests. Nonetheless, the logic is extremely tricky, so there might still be bugs.
 
