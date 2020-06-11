@@ -10,6 +10,12 @@ import Int64 exposing (Int64(..))
 import Test exposing (..)
 
 
+{-| the maximum value supported by elm-test's intRange fuzzer
+-}
+maxSignedInt32 =
+    0x7FFFFFFF
+
+
 maxInt64 =
     Int64.fromInt32s 0xFFFFFFFF 0xFFFFFFFF
 
@@ -27,7 +33,7 @@ fuzz3 a b c name thunk =
 
 
 fuzzInt64 =
-    Fuzz.map2 Int64.fromInt32s (Fuzz.intRange 0 0xFFFFFFFF) (Fuzz.intRange 0 0xFFFFFFFF)
+    Fuzz.map2 Int64.fromInt32s (Fuzz.intRange 0 maxSignedInt32) (Fuzz.intRange 0 maxSignedInt32)
 
 
 fuzzTests =
@@ -162,7 +168,7 @@ fuzzTests =
                     |> Encode.encode
                     |> Decode.decode (Int64.decoder LE)
                     |> Expect.equal (Just a)
-        , fuzz2 (Fuzz.intRange 0 0xFFFFFFFF) (Fuzz.intRange 0 0xFFFFFFFF) "unsignedCompare" <|
+        , fuzz2 (Fuzz.intRange 0 maxSignedInt32) (Fuzz.intRange 0 maxSignedInt32) "unsignedCompare" <|
             \a b ->
                 Int64.unsignedCompare (Int64.fromInt a) (Int64.fromInt b)
                     |> Expect.equal (Basics.compare a b)
